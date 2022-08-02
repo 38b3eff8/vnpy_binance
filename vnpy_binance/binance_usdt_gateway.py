@@ -63,14 +63,16 @@ ORDERTYPE_VT2BINANCES: Dict[OrderType, Tuple[str, str]] = {
     OrderType.FAK: ("LIMIT", "IOC"),
     OrderType.FOK: ("LIMIT", "FOK"),
 }
-ORDERTYPE_BINANCES2VT: Dict[Tuple[str, str], OrderType] = {v: k for k, v in ORDERTYPE_VT2BINANCES.items()}
+ORDERTYPE_BINANCES2VT: Dict[Tuple[str, str], OrderType] = {
+    v: k for k, v in ORDERTYPE_VT2BINANCES.items()}
 
 # 买卖方向映射
 DIRECTION_VT2BINANCES: Dict[Direction, str] = {
     Direction.LONG: "BUY",
     Direction.SHORT: "SELL"
 }
-DIRECTION_BINANCES2VT: Dict[str, Direction] = {v: k for k, v in DIRECTION_VT2BINANCES.items()}
+DIRECTION_BINANCES2VT: Dict[str, Direction] = {
+    v: k for k, v in DIRECTION_VT2BINANCES.items()}
 
 # 数据频率映射
 INTERVAL_VT2BINANCES: Dict[Interval, str] = {
@@ -118,8 +120,10 @@ class BinanceUsdtGateway(BaseGateway):
         """构造函数"""
         super().__init__(event_engine, gateway_name)
 
-        self.trade_ws_api: "BinanceUsdtTradeWebsocketApi" = BinanceUsdtTradeWebsocketApi(self)
-        self.market_ws_api: "BinanceUsdtDataWebsocketApi" = BinanceUsdtDataWebsocketApi(self)
+        self.trade_ws_api: "BinanceUsdtTradeWebsocketApi" = BinanceUsdtTradeWebsocketApi(
+            self)
+        self.market_ws_api: "BinanceUsdtDataWebsocketApi" = BinanceUsdtDataWebsocketApi(
+            self)
         self.rest_api: "BinanceUsdtRestApi" = BinanceUsdtRestApi(self)
 
         self.orders: Dict[str, OrderData] = {}
@@ -200,6 +204,7 @@ class BinanceUsdtRestApi(RestClient):
         self.keep_alive_count: int = 0
         self.recv_window: int = 5000
         self.time_offset: int = 0
+        self.dual_side_position: bool = False
 
         self.order_count: int = 1_000_000
         self.order_count_lock: Lock = Lock()
@@ -213,7 +218,8 @@ class BinanceUsdtRestApi(RestClient):
             return request
 
         if request.params:
-            path: str = request.path + "?" + urllib.parse.urlencode(request.params)
+            path: str = request.path + "?" + \
+                urllib.parse.urlencode(request.params)
         else:
             request.params = dict()
             path: str = request.path
@@ -285,6 +291,7 @@ class BinanceUsdtRestApi(RestClient):
         self.query_position()
         self.query_order()
         self.query_contract()
+        self.query_position_side()
         self.start_user_stream()
 
     def query_time(self) -> None:
@@ -356,6 +363,14 @@ class BinanceUsdtRestApi(RestClient):
             data=data
         )
 
+    def query_position_side(self) -> None:
+        path: str = '/fapi/v1/positionSide/dual'
+        self.add_request(
+            method="GET",
+            path=path,
+            callback=self.on_query_position_side
+        )
+
     def _new_order_id(self) -> int:
         """生成本地委托号"""
         with self.order_count_lock:
@@ -384,7 +399,7 @@ class BinanceUsdtRestApi(RestClient):
             "side": DIRECTION_VT2BINANCES[req.direction],
             "quantity": float(req.volume),
             "newClientOrderId": orderid,
-            "positionSide": req.direction.name,
+            "positionSide": req.direction.name if self.dual_side_position else 'BOTH',
         }
 
         if req.type == OrderType.MARKET:
@@ -579,6 +594,10 @@ class BinanceUsdtRestApi(RestClient):
             symbol_contract_map[contract.symbol] = contract
 
         self.gateway.write_log("合约信息查询成功")
+
+    def on_query_position_side(self, data: dict, request: Request) -> None:
+        self.dual_side_position = data['dualSidePosition']
+        print(self.dual_side_position)
 
     def on_send_order(self, data: dict, request: Request) -> None:
         """委托下单回报"""
