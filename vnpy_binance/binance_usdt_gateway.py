@@ -4,47 +4,30 @@
 3. 只支持正向合约
 """
 
-import urllib
 import hashlib
 import hmac
 import time
+import urllib
 from copy import copy
 from datetime import datetime, timedelta
 from enum import Enum
 from threading import Lock
 from typing import Any, Dict, List, Tuple
-from vnpy.trader.utility import round_to
+
 import pytz
-
 from requests.exceptions import SSLError
-from vnpy.trader.constant import (
-    Direction,
-    Exchange,
-    Product,
-    Status,
-    OrderType,
-    Interval
-)
-from vnpy.trader.gateway import BaseGateway
-from vnpy.trader.object import (
-    TickData,
-    OrderData,
-    TradeData,
-    AccountData,
-    ContractData,
-    PositionData,
-    BarData,
-    OrderRequest,
-    CancelRequest,
-    SubscribeRequest,
-    HistoryRequest
-)
-from vnpy.trader.event import EVENT_TIMER
 from vnpy.event import Event, EventEngine
-
-from vnpy_rest import Request, RestClient, Response
+from vnpy.trader.constant import (Direction, Exchange, Interval, OrderType,
+                                  Product, Status)
+from vnpy.trader.event import EVENT_TIMER
+from vnpy.trader.gateway import BaseGateway
+from vnpy.trader.object import (AccountData, BarData, CancelRequest,
+                                ContractData, HistoryRequest, OrderData,
+                                OrderRequest, PositionData, SubscribeRequest,
+                                TickData, TradeData)
+from vnpy.trader.utility import round_to
+from vnpy_rest import Request, Response, RestClient
 from vnpy_websocket import WebsocketClient
-
 
 # 中国时区
 CHINA_TZ = pytz.timezone("Asia/Shanghai")
@@ -401,6 +384,7 @@ class BinanceUsdtRestApi(RestClient):
             "side": DIRECTION_VT2BINANCES[req.direction],
             "quantity": float(req.volume),
             "newClientOrderId": orderid,
+            "positionSide": req.direction.name,
         }
 
         if req.type == OrderType.MARKET:
